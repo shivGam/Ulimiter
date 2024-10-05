@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube Shorts Limiter</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      width: 300px;
+      background-color: #181818; /* Dark background for the YouTube theme */
+      color: white;
+      margin: 0;
+      box-sizing: border-box;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    h1 {
+      font-size: 22px;
+      color: #FF0000; /* YouTube Red */
+      margin-bottom: 20px;
+      text-align: center;
+      padding-bottom: 10px;
+      width: 100%;
+    }
+
+    label {
+      font-size: 16px;
+      margin-top: 15px;
+      color: #ffffff;
+      text-align: left;
+      width: 100%;
+    }
+
+    input {
+      margin: 10px 0;
+      padding: 10px;
+      width: 100%;
+      font-size: 16px;
+      border: 1px solid #FF0000; /* Red border */
+      border-radius: 5px;
+      background-color: #282828;
+      color: #ffffff;
+      box-sizing: border-box;
+    }
+
+    button {
+      margin-top: 15px;
+      padding: 10px;
+      width: 100%;
+      font-size: 16px;
+      background-color: #FF0000; /* YouTube Red */
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #cc0000; /* Darker YouTube Red on hover */
+    }
+
+    #shorts-watched {
+      font-weight: bold;
+      color: #FF0000; /* YouTube Red */
+      font-size: 18px;
+    }
+
+    p {
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>YouTube Shorts Limiter</h1>
+    <p>Shorts watched: <span id="shorts-watched">0</span></p>
+    <label for="limit">Set daily limit:</label>
+    <input type="number" id="limit" min="1" placeholder="Enter limit">
+    <button id="save">Save Limit</button>
+    <button id="reset">Reset Count</button>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
