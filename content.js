@@ -1,7 +1,10 @@
+// Constants
+const ONE_DAY = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
+// State variables
 let shortsWatched = 0;
 let shortsHidden = false;
 let limit = 10; // Default limit
-const ONE_DAY = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
 // Function to safely send messages to the background script
 function safeSendMessage(message) {
@@ -24,7 +27,7 @@ function safeSendMessage(message) {
 
 // Hide Shorts content function
 function hideShorts() {
-  if (shortsHidden) return; // Ensure shorts are not hidden multiple times
+  if (shortsHidden) return;
   shortsHidden = true;
 
   let style = document.getElementById('youtube-shorts-limiter-style');
@@ -68,6 +71,56 @@ function isWatchingShort() {
   return window.location.pathname.startsWith("/shorts/");
 }
 
+// Create and insert the Shorts counter
+function createShortsCounter() {
+  const counterDiv = document.createElement('div');
+  counterDiv.id = 'yt-shorts-counter';
+  counterDiv.style.cssText = `
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #282828;
+    color: #FFFFFF;
+    border: 1px solid #FF0000;
+    border-radius: 2px;
+    padding: 2px 6px;
+    font-size: 14px;
+    font-weight: bold;
+    margin-right: 16px;
+  `;
+  
+  const counterLabel = document.createElement('span');
+  counterLabel.textContent = 'Shorts: ';
+  counterLabel.style.marginRight = '4px';
+  
+  const counterValue = document.createElement('span');
+  counterValue.id = 'yt-shorts-count-value';
+  counterValue.style.color = '#FF0000';
+  
+  counterDiv.appendChild(counterLabel);
+  counterDiv.appendChild(counterValue);
+  
+  return counterDiv;
+}
+
+// Update the Shorts counter
+function updateShortsCounter() {
+  const counterValue = document.getElementById('yt-shorts-count-value');
+  if (counterValue) {
+    counterValue.textContent = shortsWatched.toString();
+  }
+}
+
+// Insert the counter next to the signin/profile icon
+function insertShortsCounter() {
+  const targetElement = document.getElementById('end');
+  if (targetElement) {
+    const counterDiv = createShortsCounter();
+    targetElement.insertBefore(counterDiv, targetElement.firstChild);
+    updateShortsCounter();
+  }
+}
+
 // Check how many shorts have been watched and handle the limit
 async function checkShortsWatch() {
   if (shortsHidden) return;
@@ -77,6 +130,7 @@ async function checkShortsWatch() {
 
     try {
       await safeSendMessage({ type: "updateShortsWatched", count: shortsWatched });
+      updateShortsCounter();
 
       const response = await safeSendMessage({ type: "getLimit" });
       if (response && response.limit) {
@@ -88,23 +142,12 @@ async function checkShortsWatch() {
       }
     } catch (error) {
       console.error("Error in checkShortsWatch:", error);
-      // If we can't communicate with the background script, use the last known limit
       if (shortsWatched >= limit) {
         hideShorts();
       }
     }
   }
 }
-
-// Set up URL change detection using MutationObserver
-let lastUrl = location.href;
-new MutationObserver(() => {
-  const url = location.href;
-  if (url !== lastUrl) {
-    lastUrl = url;
-    checkShortsWatch();
-  }
-}).observe(document.body, { childList: true, subtree: true }); // Observe specific changes instead of whole document
 
 // Reset shorts watched if more than 24 hours have passed
 async function resetIfNeeded() {
@@ -113,7 +156,6 @@ async function resetIfNeeded() {
   const now = new Date();
 
   if (!lastReset || (now - lastReset) >= ONE_DAY) {
-    // Reset shorts watched and update last reset date
     shortsWatched = 0;
     chrome.storage.sync.set({ shortsWatched: 0, lastReset: now.toISOString() });
     showShorts();
@@ -124,13 +166,13 @@ async function resetIfNeeded() {
 // Initialize the extension
 async function initializeExtension() {
   try {
-    // Check and reset shorts watched if 24 hours have passed
     await resetIfNeeded();
 
-    // Load the shorts watched count and limit from storage
     const result = await new Promise(resolve => chrome.storage.sync.get(['shortsWatched', 'limit'], resolve));
     shortsWatched = result.shortsWatched || 0;
     limit = result.limit || 10;
+
+    insertShortsCounter();
 
     if (shortsWatched >= limit) {
       hideShorts();
@@ -140,22 +182,61 @@ async function initializeExtension() {
   }
 }
 
+// Set up URL change detection using MutationObserver
+function setupUrlChangeDetection() {
+  let lastUrl = location.href;
+  new MutationObserver(() => {
+    const url = location.href;
+    if (url !== lastUrl) {
+      lastUrl = url;
+      checkShortsWatch();
+    }
+  }).observe(document, { subtree: true, childList: true });
+}
+
+// Add a mutation observer to handle dynamic page changes
+function observePageChanges() {
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      if (mutation.type === 'childList') {
+        const addedNodes = mutation.addedNodes;
+        for (const node of addedNodes) {
+          if (node.nodeType === Node.ELEMENT_NODE && node.id === 'end') {
+            insertShortsCounter();
+            observer.disconnect();
+            return;
+          }
+        }
+      }
+    }
+  });
+
+  observer.observe(document.body, { childList: true, subtree: true });
+}
+
 // Listen for reset messages
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "reset") {
     shortsWatched = 0;
     showShorts();
     safeSendMessage({ type: "updateShortsWatched", count: 0 });
-    chrome.storage.sync.set({ lastReset: new Date().toISOString() }); // Update reset time
+    chrome.storage.sync.set({ lastReset: new Date().toISOString() });
+    updateShortsCounter();
     console.log("Limit reset!");
     sendResponse({ success: true });
   }
-  return true; // Indicates we want to use sendResponse asynchronously
+  return true;
 });
 
 // Initialize the extension when the script loads
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initializeExtension);
+  document.addEventListener('DOMContentLoaded', () => {
+    initializeExtension();
+    setupUrlChangeDetection();
+    observePageChanges();
+  });
 } else {
   initializeExtension();
+  setupUrlChangeDetection();
+  observePageChanges();
 }
