@@ -12,14 +12,14 @@ function safeSendMessage(message) {
     if (chrome.runtime && chrome.runtime.sendMessage) {
       chrome.runtime.sendMessage(message, response => {
         if (chrome.runtime.lastError) {
-          console.log("Failed to send message: ", chrome.runtime.lastError.message);
+          console.error("Failed to send message: ", chrome.runtime.lastError.message);
           reject(chrome.runtime.lastError);
         } else {
           resolve(response);
         }
       });
     } else {
-      console.log("Chrome runtime is not available");
+      console.error("Chrome runtime is not available");
       reject(new Error("Chrome runtime is not available"));
     }
   });
@@ -46,7 +46,8 @@ function hideShorts() {
 
   try {
     document.head.appendChild(style);
-    console.log("YouTube Shorts have been hidden. You have reached your limit.");
+    stopAllShortsAudio();
+    console.log("YouTube Shorts have been hidden and audio stopped. You have reached your limit.");
   } catch (error) {
     console.error("Error hiding YouTube Shorts:", error);
   }
@@ -63,6 +64,25 @@ function showShorts() {
     } catch (error) {
       console.error("Error showing YouTube Shorts:", error);
     }
+  }
+}
+
+// Function to stop all Shorts audio
+function stopAllShortsAudio() {
+  const videoElements = document.querySelectorAll('video');
+  videoElements.forEach(video => {
+    if (video.closest('ytd-reel-video-renderer')) {
+      video.pause();
+      video.currentTime = 0;
+    }
+  });
+}
+
+// Function to continuously check and stop Shorts audio
+function continuouslyStopShortsAudio() {
+  if (shortsHidden) {
+    stopAllShortsAudio();
+    requestAnimationFrame(continuouslyStopShortsAudio);
   }
 }
 
@@ -114,7 +134,7 @@ function updateShortsCounter() {
 // Insert the counter next to the signin/profile icon
 function insertShortsCounter() {
   const targetElement = document.getElementById('end');
-  if (targetElement) {
+  if (targetElement && !document.getElementById('yt-shorts-counter')) {
     const counterDiv = createShortsCounter();
     targetElement.insertBefore(counterDiv, targetElement.firstChild);
     updateShortsCounter();
@@ -139,11 +159,13 @@ async function checkShortsWatch() {
 
       if (shortsWatched >= limit) {
         hideShorts();
+        continuouslyStopShortsAudio();
       }
     } catch (error) {
       console.error("Error in checkShortsWatch:", error);
       if (shortsWatched >= limit) {
         hideShorts();
+        continuouslyStopShortsAudio();
       }
     }
   }
@@ -176,6 +198,7 @@ async function initializeExtension() {
 
     if (shortsWatched >= limit) {
       hideShorts();
+      continuouslyStopShortsAudio();
     }
   } catch (error) {
     console.error("Error initializing extension:", error);
@@ -190,6 +213,9 @@ function setupUrlChangeDetection() {
     if (url !== lastUrl) {
       lastUrl = url;
       checkShortsWatch();
+      if (shortsHidden) {
+        stopAllShortsAudio();
+      }
     }
   }).observe(document, { subtree: true, childList: true });
 }
@@ -203,7 +229,6 @@ function observePageChanges() {
         for (const node of addedNodes) {
           if (node.nodeType === Node.ELEMENT_NODE && node.id === 'end') {
             insertShortsCounter();
-            observer.disconnect();
             return;
           }
         }
